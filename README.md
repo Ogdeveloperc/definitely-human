@@ -22,7 +22,7 @@ Paste text or drop a Word/PDF file. Instead of one opaque percentage, the app sh
 
 ## Install (Windows, NVIDIA GPU recommended)
 
-**Easiest:** download [`DefinitelyHuman-Indir-Kur.cmd`](https://github.com/Ogdeveloperc/definitely-human/raw/main/scripts/windows/DefinitelyHuman-Indir-Kur.cmd)
+**Easiest:** download [`DefinitelyHuman-Indir-Kur.cmd`](https://github.com/Ogdeveloperc/definitely-human/releases/latest/download/DefinitelyHuman-Indir-Kur.cmd)
 and double-click it. It fetches the newest installer and runs it. Run it again any time to update.
 
 Or by hand:
