@@ -6,6 +6,7 @@ import {
 } from '../api'
 import type { Strings } from '../i18n'
 import type { Status } from '../types'
+import { Hardware } from './Hardware'
 import { UpdateButton } from './UpdateButton'
 
 export function Settings({ t, open, onClose, device }: { t: Strings; open: boolean; onClose: () => void; device: Status['device'] }) {
@@ -24,12 +25,7 @@ export function Settings({ t, open, onClose, device }: { t: Strings; open: boole
             {device && (
               <section className="set-sec" style={{ borderTop: 0 }}>
                 <h4>🖥️ {t.hardware}</h4>
-                <div className="row-between">
-                  <span className={`chip ${device.device === 'cpu' ? 'warn' : ''}`}>
-                    <span className="dot" />{device.gpu ? `⚡ ${device.gpu}` : t.cpuMode}
-                  </span>
-                </div>
-                <p className="hint">{device.device === 'cpu' ? t.cpuWarn : t.gpuHint}</p>
+                <Hardware t={t} device={device} />
               </section>
             )}
             <ProfileSection t={t} />

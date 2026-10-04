@@ -58,25 +58,36 @@ _WORD_SPAN = re.compile(r"\S+")
 
 
 def pick_device(prefer: str | None = None) -> tuple[torch.device, dict]:
-    """Choose CUDA when it really works, otherwise CPU. Returns (device, info)."""
+    """Choose CUDA when it really works, otherwise CPU. Returns (device, info).
+
+    info also carries the NVIDIA driver check (see gpu.driver_status) so the UI
+    can say whether the driver needs updating.
+    """
+    from . import gpu
+
     info: dict = {"torch": torch.__version__, "cuda_build": torch.version.cuda}
+    nvidia = gpu.query_nvidia()
+    dev, cuda_works = torch.device("cpu"), False
     if prefer == "cpu":
-        return torch.device("cpu"), {**info, "device": "cpu"}
-    if torch.cuda.is_available():
+        info["device"] = "cpu"
+    elif torch.cuda.is_available():
         try:
             name = torch.cuda.get_device_name(0)
             cap = torch.cuda.get_device_capability(0)
             x = torch.randn(256, 256, device="cuda")
             float((x @ x).sum())  # fails with "no kernel image" on unsupported GPUs
             total = torch.cuda.get_device_properties(0).total_memory
-            return torch.device("cuda"), {**info, "device": "cuda", "gpu": name,
-                                          "capability": f"{cap[0]}.{cap[1]}",
-                                          "vram_gb": round(total / 2**30, 1)}
+            dev, cuda_works = torch.device("cuda"), True
+            info.update(device="cuda", gpu=name, capability=f"{cap[0]}.{cap[1]}",
+                        vram_gb=round(total / 2**30, 1))
         except Exception as e:  # noqa: BLE001
             info["warning"] = f"GPU found but unusable ({e}); running on CPU, which is slower."
     else:
         info["warning"] = "No CUDA GPU detected; running on CPU, which is slower."
-    return torch.device("cpu"), {**info, "device": "cpu"}
+    info.setdefault("device", "cpu")
+    if prefer != "cpu":
+        info["driver_check"] = gpu.driver_status(cuda_works, nvidia)
+    return dev, info
 
 
 def _load_meld(model_dir: str, device: torch.device) -> Meld:

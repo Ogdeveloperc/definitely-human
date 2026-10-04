@@ -55,6 +55,15 @@ def cmd_doctor(a) -> int:
     info["model_dir"] = str(MODEL_DIR)
     info["model_present"] = (MODEL_DIR / "model.safetensors").exists()
     print(json.dumps(info, indent=2))
+    dc = info.get("driver_check", {})
+    if info["device"] == "cuda":
+        print(f"\nOK: ekran karti kullanilacak / the GPU will be used: {info.get('gpu')}")
+    elif dc.get("status") == "outdated":
+        print(f"\nUYARI / WARNING: NVIDIA surucusu eski ({dc.get('driver')}), en az {dc.get('driver_min')} gerekli.")
+        print("Program islemciyle (yavas) calisacak. NVIDIA App ile surucuyu guncelleyip bilgisayari yeniden baslatin.")
+        print(f"The NVIDIA driver is too old; update it (NVIDIA App) and restart.")
+    elif dc.get("status") == "cuda_error":
+        print("\nUYARI / WARNING: ekran karti kullanilamadi. Surucuyu guncelleyip bilgisayari yeniden baslatin.")
     return 0 if info["model_present"] else 1
 
 

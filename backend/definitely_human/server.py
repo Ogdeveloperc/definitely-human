@@ -78,6 +78,15 @@ def watch_idle(timeout: float = 90.0) -> None:
             os._exit(0)
 
 
+@app.post("/api/open-driver-update")
+def open_driver_update():
+    """Open NVIDIA App (or the official driver page). The app never installs drivers itself."""
+    from .engine.gpu import DRIVER_PAGE
+    from .engine.gpu import open_driver_update as _open
+
+    return {"opened": _open(), "url": DRIVER_PAGE}
+
+
 @app.get("/api/status")
 def status():
     d = state.detector

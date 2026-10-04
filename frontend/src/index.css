@@ -230,3 +230,7 @@ textarea { font: inherit; }
 .menu small { display: block; padding: 6px 10px 4px; color: var(--ink-3); font-size: 12px; line-height: 1.4; }
 .delta { font-style: normal; color: var(--ink-3); }
 .pct { margin-left: auto; font-size: 26px; font-variant-numeric: tabular-nums; }
+
+.warn-box { background: #fff6dc !important; color: #6b4b00 !important; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.warn-box .btn { padding: 7px 14px; font-size: 14px; }
+.bad { color: var(--red); font-weight: 600; }

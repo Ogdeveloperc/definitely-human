@@ -68,3 +68,17 @@ def test_language_check():
     assert not style.language_check("Der Hund läuft schnell über die Straße und die Katze schläft im Haus.")["english"]
     assert style.language_check("The café served crème brûlée and the naïve customers loved it, which was not surprising.")["english"]
     assert style.language_check("I spent most of last summer trying to get my grandfather's old radio working again.")["english"]
+
+
+def test_driver_check():
+    from definitely_human.engine import gpu
+
+    out = "NVIDIA GeForce RTX 5070 Laptop GPU, 581.42, 8151\n"
+    g = gpu.parse_smi(out)
+    assert g == [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "driver": "581.42", "vram_gb": 8.0}]
+    assert gpu.driver_status(True, g)["status"] == "ok"
+    old = gpu.parse_smi("NVIDIA GeForce RTX 5070 Laptop GPU, 556.12, 8151")
+    assert gpu.driver_status(False, old)["status"] == "outdated"
+    assert gpu.driver_status(False, g)["status"] == "cuda_error"
+    assert gpu.driver_status(False, [])["status"] == "no_nvidia"
+    assert gpu.parse_version("570.65") >= (570, 65) > gpu.parse_version("566.36")

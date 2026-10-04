@@ -76,7 +76,7 @@ Windows **Settings → Apps → Installed apps → Definitely Human → Uninstal
 | Problem | Fix |
 |---|---|
 | Setup window shows an error | Check the internet connection and run the `.cmd` file again. It picks up where it stopped. |
-| App says *CPU mode (slow)* | Update the NVIDIA driver, restart the computer, open the app again. |
+| App says *CPU mode (slow)* or *driver outdated* | **Settings → Hardware** shows your driver version and the minimum needed (570.65). Click **Update driver**: it opens NVIDIA App (or NVIDIA's driver page). Update, restart the computer, open the app again. |
 | App doesn't open or behaves oddly | Start menu → **Definitely Human - Repair**. |
 | Something else | Open an [issue](https://github.com/Ogdeveloperc/definitely-human/issues) and attach `C:\DefinitelyHuman\data\app.log`. |
 
@@ -128,7 +128,7 @@ Windows **Ayarlar → Uygulamalar → Yüklü uygulamalar → Definitely Human �
 | Sorun | Çözüm |
 |---|---|
 | Kurulum penceresi hata veriyor | İnterneti kontrol edip `.cmd` dosyasını tekrar çalıştırın, kaldığı yerden devam eder. |
-| Program *İşlemci modu (yavaş)* diyor | NVIDIA sürücüsünü güncelleyin, bilgisayarı yeniden başlatın, programı tekrar açın. |
+| Program *İşlemci modu (yavaş)* ya da *sürücü eski* diyor | **Ayarlar → Donanım** sürücü sürümünüzü ve gereken en az sürümü (570.65) gösterir. **Sürücüyü güncelle**'ye basın: NVIDIA App (ya da NVIDIA'nın sürücü sayfası) açılır. Güncelleyin, bilgisayarı yeniden başlatın, programı tekrar açın. |
 | Program açılmıyor / garip davranıyor | Başlat menüsü → **Definitely Human - Repair**. |
 | Başka bir sorun | Bir [issue](https://github.com/Ogdeveloperc/definitely-human/issues) açın, `C:\DefinitelyHuman\data\app.log` dosyasını ekleyin. |
 

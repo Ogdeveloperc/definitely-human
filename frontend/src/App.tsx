@@ -4,6 +4,7 @@ import { analyzeFile, analyzeText, checkUpdate, getCalib, getStatus, type Update
 import { InputPanel, type Submission } from './components/InputPanel'
 import { DrawCheck, Logo } from './components/Logo'
 import { Results } from './components/Results'
+import { driverNeedsAction } from './components/Hardware'
 import { CalibSection, Settings } from './components/Settings'
 import { strings, type Lang } from './i18n'
 import type { Analysis, Domain, Status } from './types'
@@ -146,6 +147,12 @@ export default function App() {
               <h1>{t.setupTitle}</h1>
               <p>{t.setupDesc}</p>
             </div>
+            {driverNeedsAction(dev) && (
+              <div className="err warn-box" style={{ marginBottom: 16 }}>
+                ⚠️ {t.drvSetupFirst}
+                <button className="btn ghost" onClick={() => setSettings(true)}>{t.drvFix}</button>
+              </div>
+            )}
             <div className="card input-card">
               <CalibSection t={t} onDone={() => window.setTimeout(() => setSetup(false), 2500)} />
             </div>
@@ -159,7 +166,12 @@ export default function App() {
               <h1>{lang === 'tr' ? 'Yazın ne kadar “insan”?' : 'How human does it read?'}</h1>
               <p>{t.tagline}</p>
             </div>
-            {dev?.warning && <div className="err" style={{ background: '#fff6dc', color: '#6b4b00' }}>⚠️ {t.cpuWarn}</div>}
+            {driverNeedsAction(dev) ? (
+              <div className="err warn-box">
+                ⚠️ {dev?.driver_check?.status === 'outdated' ? t.drvBannerOld : t.drvBannerError}
+                <button className="btn ghost" onClick={() => setSettings(true)}>{t.drvFix}</button>
+              </div>
+            ) : dev?.warning && <div className="err warn-box">⚠️ {t.cpuWarn}</div>}
             <InputPanel t={t} disabled={!ready} domain={domain} setDomain={setDomain} onSubmit={submit} />
             {error && <motion.div className="err" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>{t.error}: {error}</motion.div>}
           </motion.div>

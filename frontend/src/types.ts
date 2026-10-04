@@ -52,5 +52,16 @@ export interface Analysis {
 export interface Status {
   ready: boolean
   error: string | null
-  device: { device: string; gpu?: string; vram_gb?: number; warning?: string } | null
+  device: {
+    device: string
+    gpu?: string
+    vram_gb?: number
+    warning?: string
+    driver_check?: {
+      status: 'ok' | 'outdated' | 'cuda_error' | 'no_nvidia'
+      driver?: string
+      driver_min: string
+      nvidia_gpu?: string
+    }
+  } | null
 }

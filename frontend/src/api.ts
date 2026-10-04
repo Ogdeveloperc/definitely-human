@@ -123,3 +123,7 @@ export interface CalibStatus {
 export const getCalib = () => fetch('/api/calibrate').then(json<CalibStatus>)
 export const startCalib = () => fetch('/api/calibrate', { method: 'POST' }).then(json<CalibStatus>)
 export const resetCalib = () => fetch('/api/calibrate', { method: 'DELETE' }).then(json<CalibStatus>)
+
+/** Opens NVIDIA App (or NVIDIA's driver page). The app itself never installs drivers. */
+export const openDriverUpdate = () =>
+  fetch('/api/open-driver-update', { method: 'POST' }).then(json<{ opened: 'nvidia-app' | 'web'; url: string }>)
