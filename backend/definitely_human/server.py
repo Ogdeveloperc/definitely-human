@@ -207,7 +207,14 @@ async def build_profile(files: list[UploadFile] = File(...)):
 
     if state.detector is None:
         raise HTTPException(503, state.error or "The model is still loading.")
+    from .engine.style import language_check
+
     texts = [await _read_upload(f) for f in files]
+    # The detector only understands English; other languages would give meaningless baselines.
+    not_en = [f.filename for f, t in zip(files, texts) if not language_check(t)["english"]]
+    if not_en:
+        raise HTTPException(400, "These files don't look like English, please remove them / "
+                                 "Bu dosyalar İngilizce görünmüyor, lütfen çıkarın: " + ", ".join(not_en))
     words = sum(len(t.split()) for t in texts)
     if len(texts) < 3 or words < 1500:
         raise HTTPException(400, "Add at least 3 documents and 1,500 words in total.")
