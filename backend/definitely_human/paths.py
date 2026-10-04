@@ -18,4 +18,4 @@ MELD_FILES = ["config.json", "meld_config.json", "tokenizer.json", "tokenizer_co
               "model.safetensors", "README.md"]
 
 # GitHub repository used by "Check for updates" (owner/name). Set once the repo exists.
-GITHUB_REPO = os.environ.get("DH_GITHUB_REPO", "OWNER/definitely-human")
+GITHUB_REPO = os.environ.get("DH_GITHUB_REPO", "Ogdeveloperc/definitely-human")
