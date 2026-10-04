@@ -37,7 +37,8 @@ Paste text or drop a Word/PDF file. Instead of one opaque percentage, it shows <
 - **About 15 GB free** on drive C:
 - **Internet**, only during installation and the one-time calibration
 - **An NVIDIA graphics card is recommended** (tested target: RTX 5070). Without one it still works, just slower.
-  Update the NVIDIA driver first (NVIDIA App / GeForce Experience → Drivers).
+  Any NVIDIA driver **570.65 or newer** (from early 2025) is enough; you don't need the very latest one.
+  The app checks this for you and only asks you to update if the driver is older than that.
 
 ### Steps
 1. **Download** [`DefinitelyHuman-Indir-Kur.cmd`](https://github.com/Ogdeveloperc/definitely-human/releases/latest/download/DefinitelyHuman-Indir-Kur.cmd).
@@ -51,8 +52,9 @@ Paste text or drop a Word/PDF file. Instead of one opaque percentage, it shows <
 5. Open **Definitely Human** from the desktop. The app opens in your browser.
 6. On first start you'll see **Finish setup**. Click **Start calibration** (15–30 minutes on an RTX graphics card;
    needs internet, about 800 MB). This measures where green/yellow/red should start on *your* computer. It's done once.
-7. Check **Settings → Hardware**: it should show **⚡ your graphics card**. If it says *CPU mode (slow)*,
-   update the NVIDIA driver and restart the app.
+7. Check **Settings → Hardware**: it should show **⚡ your graphics card** and your driver version.
+   You'll only see an *update driver* warning if the driver is older than 570.65 (then the app still works,
+   on the CPU, just slower).
 
 Prefer doing it by hand? Download `DefinitelyHuman-Setup-x.y.z.exe` from
 [Releases](https://github.com/Ogdeveloperc/definitely-human/releases/latest) and run it; it does steps 3–4.
@@ -76,7 +78,8 @@ Windows **Settings → Apps → Installed apps → Definitely Human → Uninstal
 | Problem | Fix |
 |---|---|
 | Setup window shows an error | Check the internet connection and run the `.cmd` file again. It picks up where it stopped. |
-| App says *CPU mode (slow)* or *driver outdated* | **Settings → Hardware** shows your driver version and the minimum needed (570.65). Click **Update driver**: it opens NVIDIA App (or NVIDIA's driver page). Update, restart the computer, open the app again. |
+| App says *driver outdated* | Only shown when the driver is older than 570.65. In **Settings → Hardware** click **Update driver**: it opens NVIDIA App (or NVIDIA's driver page); the app never installs drivers itself. Update, restart the computer, open the app again. Until then the app keeps working on the CPU, just slower. |
+| App says *CPU mode (slow)* with no driver warning | No NVIDIA graphics card was found. Everything still works, just slower. |
 | App doesn't open or behaves oddly | Start menu → **Definitely Human - Repair**. |
 | Something else | Open an [issue](https://github.com/Ogdeveloperc/definitely-human/issues) and attach `C:\DefinitelyHuman\data\app.log`. |
 
@@ -88,7 +91,8 @@ Windows **Settings → Apps → Installed apps → Definitely Human → Uninstal
 - C: diskinde **yaklaşık 15 GB boş yer**
 - **İnternet**: sadece kurulum ve bir kerelik kalibrasyon sırasında
 - **NVIDIA ekran kartı önerilir** (hedef: RTX 5070). Yoksa da çalışır, sadece daha yavaş olur.
-  Önce NVIDIA sürücüsünü güncelleyin (NVIDIA App / GeForce Experience → Sürücüler).
+  **570.65 veya daha yeni** (2025 başı ve sonrası) her NVIDIA sürücüsü yeterli; en son sürümde olmanız gerekmez.
+  Program bunu kendisi kontrol eder ve sadece sürücü bundan eskiyse güncellemenizi ister.
 
 ### Adımlar
 1. [`DefinitelyHuman-Indir-Kur.cmd`](https://github.com/Ogdeveloperc/definitely-human/releases/latest/download/DefinitelyHuman-Indir-Kur.cmd)
@@ -103,8 +107,9 @@ Windows **Settings → Apps → Installed apps → Definitely Human → Uninstal
 6. İlk açılışta **"Kurulumu tamamla"** ekranı gelir. **"Kalibrasyonu başlat"** deyin (RTX ekran kartında 15-30 dakika,
    internet gerekir, yaklaşık 800 MB). Bu adım, yeşil/sarı/kırmızının nereden başlayacağını *sizin* bilgisayarınızda
    ölçer. Bir kere yapılır.
-7. **Ayarlar → Donanım** kısmında **⚡ ekran kartınızın adı** yazmalı. *İşlemci modu (yavaş)* yazıyorsa
-   NVIDIA sürücüsünü güncelleyip programı yeniden açın.
+7. **Ayarlar → Donanım** kısmında **⚡ ekran kartınızın adı** ve sürücü sürümünüz yazmalı.
+   *Sürücüyü güncelle* uyarısını sadece sürücünüz 570.65'ten eskiyse görürsünüz (o durumda da program çalışır,
+   işlemciyle, sadece daha yavaş).
 
 Elle kurmak isterseniz [Releases](https://github.com/Ogdeveloperc/definitely-human/releases/latest) sayfasından
 `DefinitelyHuman-Setup-x.y.z.exe` dosyasını indirip çalıştırın. 3. ve 4. adımları yapar.
@@ -128,7 +133,8 @@ Windows **Ayarlar → Uygulamalar → Yüklü uygulamalar → Definitely Human �
 | Sorun | Çözüm |
 |---|---|
 | Kurulum penceresi hata veriyor | İnterneti kontrol edip `.cmd` dosyasını tekrar çalıştırın, kaldığı yerden devam eder. |
-| Program *İşlemci modu (yavaş)* ya da *sürücü eski* diyor | **Ayarlar → Donanım** sürücü sürümünüzü ve gereken en az sürümü (570.65) gösterir. **Sürücüyü güncelle**'ye basın: NVIDIA App (ya da NVIDIA'nın sürücü sayfası) açılır. Güncelleyin, bilgisayarı yeniden başlatın, programı tekrar açın. |
+| Program *sürücü eski* diyor | Sadece sürücü 570.65'ten eskiyse çıkar. **Ayarlar → Donanım**'da **Sürücüyü güncelle**'ye basın: NVIDIA App (ya da NVIDIA'nın sürücü sayfası) açılır; program sürücüyü kendisi kurmaz. Güncelleyin, bilgisayarı yeniden başlatın, programı tekrar açın. O zamana kadar program işlemciyle çalışmaya devam eder, sadece daha yavaştır. |
+| Program sürücü uyarısı olmadan *İşlemci modu (yavaş)* diyor | NVIDIA ekran kartı bulunamadı. Her şey yine çalışır, sadece daha yavaş. |
 | Program açılmıyor / garip davranıyor | Başlat menüsü → **Definitely Human - Repair**. |
 | Başka bir sorun | Bir [issue](https://github.com/Ogdeveloperc/definitely-human/issues) açın, `C:\DefinitelyHuman\data\app.log` dosyasını ekleyin. |
 
