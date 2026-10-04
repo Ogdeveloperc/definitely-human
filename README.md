@@ -22,13 +22,19 @@ Paste text or drop a Word/PDF file. Instead of one opaque percentage, the app sh
 
 ## Install (Windows, NVIDIA GPU recommended)
 
-1. Download `DefinitelyHuman-Setup-x.y.z.exe` from **Releases**.
-2. Run it. It installs to `C:\DefinitelyHuman`, then downloads Python, the GPU build of PyTorch
-   and the model (~7 GB total, needs internet once).
+**Easiest:** download [`DefinitelyHuman-Indir-Kur.cmd`](https://github.com/Ogdeveloperc/definitely-human/raw/main/scripts/windows/DefinitelyHuman-Indir-Kur.cmd)
+and double-click it. It fetches the newest installer and runs it. Run it again any time to update.
+
+Or by hand:
+
+1. Download `DefinitelyHuman-Setup-x.y.z.exe` from [Releases](https://github.com/Ogdeveloperc/definitely-human/releases/latest).
+2. Run it. It installs to `C:\DefinitelyHuman`, then downloads Python, the GPU build of PyTorch,
+   the detector and the OCR model (~7 GB in total, needs internet once).
 3. Open **Definitely Human** from the desktop. On first start, run **Finish setup → Start calibration**
    (15–30 min on an RTX 5070). After that everything runs offline.
 
-Updates: run the newer Setup.exe over the old one. The model, settings and calibration are kept.
+Updates: the app tells you when a new version is out; run the new Setup.exe over the old one.
+The model, settings and calibration are kept.
 
 ## How it works
 

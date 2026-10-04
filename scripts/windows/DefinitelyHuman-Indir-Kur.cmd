@@ -1,6 +1,6 @@
 @echo off
-rem Definitely Human - download the latest installer from the private GitHub repo and run it.
-rem Double-click this file. Re-run it later to update to the newest version.
+rem Definitely Human - download the latest installer from GitHub Releases and run it.
+rem Double-click this file. Run it again later to update to the newest version.
 title Definitely Human - Indir ve Kur
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = Get-Content -LiteralPath '%~f0' -Raw; Invoke-Expression ($s.Substring($s.LastIndexOf('#POWERSHELL#') + 12))"
 echo.
@@ -9,51 +9,31 @@ exit /b
 
 #POWERSHELL#
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'   # the progress bar makes Invoke-WebRequest very slow
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $repo = 'Ogdeveloperc/definitely-human'
 function Say($m, $c = 'Green') { Write-Host ''; Write-Host $m -ForegroundColor $c }
 
 try {
-  # 1) GitHub CLI (official, via winget)
-  if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Say '[1/4] GitHub araci kuruluyor (gh)... / Installing GitHub CLI...'
-    winget install --id GitHub.cli -e --silent --accept-source-agreements --accept-package-agreements
-    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { $env:Path += ";$env:ProgramFiles\GitHub CLI" }
-  } else { Say '[1/4] GitHub araci hazir. / GitHub CLI found.' }
+  Say '[1/3] En yeni surum bulunuyor... / Finding the latest version...'
+  $rel = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'definitely-human' }
+  $asset = $rel.assets | Where-Object { $_.name -like 'DefinitelyHuman-Setup-*.exe' } | Select-Object -First 1
+  if (-not $asset) { throw "Surumde kurulum dosyasi yok / no installer in release $($rel.tag_name)" }
+  Write-Host ("      {0}  ({1:N0} MB)" -f $asset.name, ($asset.size / 1MB))
 
-  # 2) Sign in (browser) only if needed
-  $loggedIn = $true
-  gh auth status --hostname github.com *> $null; if ($LASTEXITCODE -ne 0) { $loggedIn = $false }
-  $didLogin = $false
-  if (-not $loggedIn) {
-    Say '[2/4] Tarayicida GitHub girisi acilacak. Ekrandaki kodu girip onaylayin.' 'Yellow'
-    Write-Host '      A browser window will open for GitHub sign-in; enter the code shown here.'
-    gh auth login --hostname github.com --git-protocol https --web
-    if ($LASTEXITCODE -ne 0) { throw 'GitHub girisi yapilamadi / sign-in failed' }
-    $didLogin = $true
-  } else { Say '[2/4] GitHub girisi zaten var. / Already signed in.' }
-
-  # 3) Download the newest installer
-  Say '[3/4] En yeni kurulum dosyasi indiriliyor... / Downloading the latest installer...'
+  Say '[2/3] Indiriliyor... / Downloading...'
   $dir = Join-Path $env:TEMP 'DefinitelyHuman'
   New-Item -ItemType Directory -Force $dir | Out-Null
-  Remove-Item "$dir\*.exe" -ErrorAction SilentlyContinue
-  gh release download --repo $repo --pattern 'DefinitelyHuman-Setup-*.exe' --dir $dir --clobber
-  if ($LASTEXITCODE -ne 0) { throw 'Indirme basarisiz / download failed' }
-  $exe = Get-ChildItem "$dir\DefinitelyHuman-Setup-*.exe" | Sort-Object LastWriteTime | Select-Object -Last 1
-  Write-Host "      $($exe.Name)"
+  $exe = Join-Path $dir $asset.name
+  Invoke-WebRequest $asset.browser_download_url -OutFile $exe -UseBasicParsing
+  if ((Get-Item $exe).Length -ne $asset.size) { throw 'Dosya eksik indi / incomplete download' }
 
-  # 4) Run it (Windows will ask for administrator permission)
-  Say '[4/4] Kurulum baslatiliyor (yonetici izni istenecek)... / Starting setup...'
-  Start-Process $exe.FullName -Wait
-
-  if ($didLogin) {
-    $a = Read-Host 'GitHub oturumu bu bilgisayardan kapatilsin mi? / Sign out of GitHub on this PC? (E/H)'
-    if ($a -match '^[EeYy]') { gh auth logout --hostname github.com; Say 'GitHub oturumu kapatildi. / Signed out.' }
-  }
+  Say '[3/3] Kurulum baslatiliyor (yonetici izni istenecek)... / Starting setup (admin permission needed)...'
+  Start-Process $exe -Wait
   Say 'Tamam! Masaustundeki "Definitely Human" ile acabilirsiniz. / Done!'
 }
 catch {
   Say "HATA / ERROR: $_" 'Red'
   Write-Host 'Internet baglantisini kontrol edip bu dosyayi tekrar calistirin.'
+  Write-Host "Ya da elle indirin / or download manually: https://github.com/$repo/releases/latest"
 }
