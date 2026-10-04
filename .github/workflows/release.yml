@@ -1,0 +1,79 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      smoke_test:
+        description: "Install on a Windows runner and analyze sample files (CPU)"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Version
+        id: v
+        shell: bash
+        run: echo "version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Stage app files
+        shell: pwsh
+        run: |
+          $app = "build/app"
+          New-Item -ItemType Directory -Force $app, "$app/bin" | Out-Null
+          Copy-Item pyproject.toml, uv.lock, .python-version, README.md, LICENSE, installer/install.ps1 $app
+          Copy-Item -Recurse backend, assets $app
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ $app | Remove-Item -Recurse -Force
+          Invoke-WebRequest https://github.com/astral-sh/uv/releases/download/0.12.23/uv-x86_64-pc-windows-msvc.zip -OutFile uv.zip
+          Expand-Archive uv.zip -DestinationPath uvtmp
+          Copy-Item uvtmp/uv.exe "$app/bin/uv.exe"
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc /DAppVersion=${{ steps.v.outputs.version }} installer/DefinitelyHuman.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/*.exe
+
+      - name: Smoke test (silent install + CPU analysis)
+        if: github.event_name == 'push' || inputs.smoke_test
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist/*.exe | Select-Object -First 1
+          Start-Process $exe.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=C:\DefinitelyHuman" -Wait
+          $py = "C:\DefinitelyHuman\.venv\Scripts\python.exe"
+          if (-not (Test-Path $py)) { Get-Content C:\DefinitelyHuman\*.log -ErrorAction SilentlyContinue; throw "venv missing" }
+          & $py -m definitely_human.cli doctor
+          & $py -m definitely_human.cli --device cpu check tests/fixtures/sample.docx --domain essay
+          if ($LASTEXITCODE -ne 0) { throw "docx check failed" }
+          & $py -m definitely_human.cli --device cpu check tests/fixtures/sample.pdf --domain paper
+          if ($LASTEXITCODE -ne 0) { throw "pdf check failed" }
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe

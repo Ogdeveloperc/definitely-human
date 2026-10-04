@@ -1,0 +1,14 @@
+.venv/
+models/
+__pycache__/
+*.pyc
+node_modules/
+frontend/dist/
+backend/definitely_human/static/
+eval/data/
+eval/results/
+dist/
+.DS_Store
+data/
+build/
+.claude/settings.local.json
