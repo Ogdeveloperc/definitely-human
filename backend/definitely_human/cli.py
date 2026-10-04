@@ -11,7 +11,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-from .paths import MELD_FILES, MELD_REPO, MELD_REVISION, MODEL_DIR
+from .paths import MELD_FILES, MELD_SOURCES, MODEL_DIR
 
 
 def _offline() -> None:
@@ -30,7 +30,14 @@ def cmd_download(_a) -> int:
             print(f"  ok   {f}")
             continue
         print(f"  get  {f} ...", flush=True)
-        hf_hub_download(MELD_REPO, f, revision=MELD_REVISION, local_dir=MODEL_DIR)
+        for i, (repo, rev) in enumerate(MELD_SOURCES):
+            try:
+                hf_hub_download(repo, f, revision=rev, local_dir=MODEL_DIR)
+                break
+            except Exception as e:  # noqa: BLE001
+                if i == len(MELD_SOURCES) - 1:
+                    raise
+                print(f"       {repo} unavailable ({type(e).__name__}), trying the next source", flush=True)
     print(f"Model ready in {MODEL_DIR}")
     print("  get  OCR model (docTR) ...", flush=True)
     from .ocr import prefetch

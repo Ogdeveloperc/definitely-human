@@ -27,14 +27,39 @@ from .engine.meld_model import canonicalize, top_quantile_mean
 from .engine.segment import split_document
 
 DOMAINS = ["abstracts", "news", "wiki", "books", "reddit"]
+# name -> download sources tried in order: our verified public mirror, then the original
 SOURCES = {
-    "meld_eval.jsonl": ("anon-review-meld-2026/meld-eval", "meld_eval.jsonl",
-                        "4c80f0fdc003854e5b6bfda90f7ac41ffb12e232"),
-    "daigt.parquet": ("Yunij/kaggle-comp-daigt", "data/train-00000-of-00001.parquet",
-                      "8460dd337298f84efc22339f6da7f3c0137e5fbb"),
+    "meld_eval.jsonl": [
+        ("odeveloper/meld-eval", "meld_eval.jsonl", "b0c10f3bdf7737aae2b61f6d0332f47c291a1319"),
+        ("anon-review-meld-2026/meld-eval", "meld_eval.jsonl", "4c80f0fdc003854e5b6bfda90f7ac41ffb12e232"),
+    ],
+    "daigt.parquet": [
+        ("Yunij/kaggle-comp-daigt", "data/train-00000-of-00001.parquet", "8460dd337298f84efc22339f6da7f3c0137e5fbb"),
+    ],
 }
 RHO = 0.25
 LONG_WORDS = int(os.environ.get("DH_CALIB_LONG_WORDS", "8000"))
+
+
+def _download(url: str, part: Path, name: str, log, progress) -> None:
+    """Resumable download of `url` into `part` (same bytes from every source, so resuming is safe)."""
+    import urllib.request
+
+    have = part.stat().st_size if part.exists() else 0
+    req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        if have and r.status != 206:  # server ignored the range: start over
+            have = 0
+        total = have + int(r.headers.get("Content-Length", 0))
+        log(f"downloading {name} ({total / 2**20:.0f} MB)")
+        with open(part, "ab" if have else "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+                have += len(chunk)
+                if progress and total:
+                    progress(have / total, f"{have / 2**20:.0f} / {total / 2**20:.0f} MB")
+    if total and part.stat().st_size != total:
+        raise IOError(f"{name}: incomplete download, run calibration again to resume")
 
 
 def fetch_data(data_dir: Path, log=print, progress=None) -> None:
@@ -42,28 +67,21 @@ def fetch_data(data_dir: Path, log=print, progress=None) -> None:
 
     Deliberately not huggingface_hub: the running app sets HF_HUB_OFFLINE=1.
     """
-    import urllib.request
+    import urllib.error
 
     data_dir.mkdir(parents=True, exist_ok=True)
-    todo = [(n, src) for n, src in SOURCES.items() if not (data_dir / n).exists()]
-    for k, (name, (repo, path, rev)) in enumerate(todo):
-        url = f"https://huggingface.co/datasets/{repo}/resolve/{rev}/{path}"
+    todo = [(n, srcs) for n, srcs in SOURCES.items() if not (data_dir / n).exists()]
+    for k, (name, srcs) in enumerate(todo):
         part = data_dir / (name + ".part")
-        have = part.stat().st_size if part.exists() else 0
-        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            if have and r.status != 206:  # server ignored the range: start over
-                have = 0
-            total = have + int(r.headers.get("Content-Length", 0))
-            log(f"downloading {name} ({total / 2**20:.0f} MB)")
-            with open(part, "ab" if have else "wb") as f:
-                while chunk := r.read(1 << 20):
-                    f.write(chunk)
-                    have += len(chunk)
-                    if progress and total:
-                        progress((k + have / total) / len(todo), f"{have / 2**20:.0f} / {total / 2**20:.0f} MB")
-        if total and part.stat().st_size != total:
-            raise IOError(f"{name}: incomplete download, run calibration again to resume")
+        for i, (repo, path, rev) in enumerate(srcs):
+            try:
+                _download(f"https://huggingface.co/datasets/{repo}/resolve/{rev}/{path}", part, name,
+                          log, (lambda f, d, k=k: progress((k + f) / len(todo), d)) if progress else None)
+                break
+            except (urllib.error.URLError, OSError) as e:
+                if i == len(srcs) - 1:
+                    raise
+                log(f"{repo} unavailable ({e}); trying the next source")
         part.rename(data_dir / name)
 
 

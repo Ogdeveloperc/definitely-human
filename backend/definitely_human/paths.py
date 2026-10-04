@@ -12,8 +12,12 @@ PROFILE = DATA_DIR / "profile.json"
 LOCAL_CALIBRATION = DATA_DIR / "calibration.json"
 CALIB_DIR = DATA_DIR / "calibration-work"
 
-MELD_REPO = "anon-review-meld-2026/meld"
-MELD_REVISION = "8990324abd92e1fa17072f6887ea1e5c1cef5abc"
+# Tried in order. The first is our byte-identical public mirror (verified by SHA-256);
+# the second is the authors' original anonymous-review repository.
+MELD_SOURCES = [
+    ("odeveloper/meld", "71d48f8e8be43885f86553565537ed015bff480a"),
+    ("anon-review-meld-2026/meld", "8990324abd92e1fa17072f6887ea1e5c1cef5abc"),
+]
 MELD_FILES = ["config.json", "meld_config.json", "tokenizer.json", "tokenizer_config.json",
               "model.safetensors", "README.md"]
 
