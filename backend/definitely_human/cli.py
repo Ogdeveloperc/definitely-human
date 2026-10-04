@@ -90,8 +90,12 @@ def cmd_serve(a) -> int:
     from .paths import DATA_DIR
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if sys.stdout is None or sys.stderr is None:  # pythonw: libraries writing to them would crash
+        sink = open(DATA_DIR / "console.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stdout or sink
+        sys.stderr = sys.stderr or sink
     handlers = [logging.FileHandler(DATA_DIR / "app.log", encoding="utf-8")]
-    if sys.stdout is not None:  # pythonw has no console
+    if sys.stdout is not None and sys.stdout.isatty():
         handlers.append(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
     threading.Thread(target=server.load_model, args=(a.device,), daemon=True).start()
@@ -99,8 +103,7 @@ def cmd_serve(a) -> int:
         threading.Thread(target=server.watch_idle, daemon=True).start()
     if not a.no_browser:
         threading.Thread(target=lambda: (time.sleep(1.5), webbrowser.open(url)), daemon=True).start()
-    if sys.stdout is not None:
-        print(f"Definitely Human is running at {url}  (close this window to stop)")
+    print(f"Definitely Human is running at {url}  (close this window to stop)")
     uvicorn.run(server.app, host="127.0.0.1", port=a.port, log_level="warning", log_config=None)
     return 0
 

@@ -11,18 +11,66 @@ async function json<T>(r: Response): Promise<T> {
 
 export const getStatus = () => fetch('/api/status').then(json<Status>)
 
-export const analyzeText = (text: string, domain: Domain) =>
+type OnProgress = (f: number) => void
+
+/** Reads the server's NDJSON stream: progress lines, then the result or an error. */
+async function streamed(r: Response, onProgress?: OnProgress): Promise<Analysis> {
+  if (!r.ok || !r.body) return json<Analysis>(r)
+  const reader = r.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let nl
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line) continue
+      const m = JSON.parse(line)
+      if ('progress' in m) onProgress?.(m.progress)
+      else if ('result' in m) return m.result as Analysis
+      else if ('error' in m) throw new Error(m.error)
+    }
+  }
+  throw new Error('Connection closed before the analysis finished.')
+}
+
+export const analyzeText = (text: string, domain: Domain, onProgress?: OnProgress) =>
   fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, domain }),
-  }).then(json<Analysis>)
+  }).then((r) => streamed(r, onProgress))
 
-export const analyzeFile = (file: File, domain: Domain) => {
+export const analyzeFile = (file: File, domain: Domain, onProgress?: OnProgress) => {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('domain', domain)
-  return fetch('/api/analyze-file', { method: 'POST', body: fd }).then(json<Analysis>)
+  return fetch('/api/analyze-file', { method: 'POST', body: fd }).then((r) => streamed(r, onProgress))
+}
+
+/** Ask the server to build a .docx/.txt of the (edited) text and save it. */
+export async function exportText(text: string, format: 'docx' | 'txt', name: string) {
+  const r = await fetch('/api/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, format }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  saveBlob(await r.blob(), `${name}.${format}`)
+}
+
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
 export interface UpdateInfo { current: string; latest: string; update: boolean; url: string }

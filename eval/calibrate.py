@@ -15,14 +15,14 @@ sys.path.insert(0, str(ROOT / "backend"))
 from definitely_human.calib import choose, load_records  # noqa: E402
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--doc-fpr", type=float, default=0.02)
-ap.add_argument("--yellow-doc-fpr", type=float, default=0.15)
+ap.add_argument("--doc-fpr", type=float, default=0.05, help="share of ~8k-word human docs with any red")
+ap.add_argument("--yellow-sentence-fpr", type=float, default=0.03)
 ap.add_argument("--run", type=int, default=2)
 ap.add_argument("--write", action="store_true")
 a = ap.parse_args()
 recs = load_records(ROOT / "eval" / "results" / "raw")
 print(len(recs), "documents")
-cfg, _ = choose(recs, a.doc_fpr, a.yellow_doc_fpr, a.run)
+cfg, _ = choose(recs, a.doc_fpr, a.yellow_sentence_fpr, a.run)
 kinds = {}
 for r in recs:
     kinds.setdefault(r["kind"].split("/")[0], []).append(r["doc_score"])

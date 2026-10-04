@@ -61,3 +61,10 @@ def test_style_hits():
     t = "Moreover, it is important to note that we delve into this."
     hits = [h["phrase"] for h in style.phrase_hits(t, 0, len(t))]
     assert hits == ["moreover", "it is important to note", "delve"]
+
+
+def test_language_check():
+    assert not style.language_check("Yapraklar dökülüyor, fiyatlar da! Güneş gözlükleri şimdi yüzde elli indirimli.")["english"]
+    assert not style.language_check("Der Hund läuft schnell über die Straße und die Katze schläft im Haus.")["english"]
+    assert style.language_check("The café served crème brûlée and the naïve customers loved it, which was not surprising.")["english"]
+    assert style.language_check("I spent most of last summer trying to get my grandfather's old radio working again.")["english"]

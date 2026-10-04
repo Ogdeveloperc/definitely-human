@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import pickle
 import random
 from collections import defaultdict
@@ -33,18 +34,37 @@ SOURCES = {
                       "8460dd337298f84efc22339f6da7f3c0137e5fbb"),
 }
 RHO = 0.25
+LONG_WORDS = int(os.environ.get("DH_CALIB_LONG_WORDS", "8000"))
 
 
-def fetch_data(data_dir: Path, log=print) -> None:
-    from huggingface_hub import hf_hub_download
+def fetch_data(data_dir: Path, log=print, progress=None) -> None:
+    """Download the calibration corpora over plain HTTPS (resumable).
+
+    Deliberately not huggingface_hub: the running app sets HF_HUB_OFFLINE=1.
+    """
+    import urllib.request
 
     data_dir.mkdir(parents=True, exist_ok=True)
-    for name, (repo, path, rev) in SOURCES.items():
-        if (data_dir / name).exists():
-            continue
-        log(f"downloading {name}")
-        got = hf_hub_download(repo, path, revision=rev, repo_type="dataset", local_dir=data_dir / "_dl")
-        Path(got).rename(data_dir / name)
+    todo = [(n, src) for n, src in SOURCES.items() if not (data_dir / n).exists()]
+    for k, (name, (repo, path, rev)) in enumerate(todo):
+        url = f"https://huggingface.co/datasets/{repo}/resolve/{rev}/{path}"
+        part = data_dir / (name + ".part")
+        have = part.stat().st_size if part.exists() else 0
+        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            if have and r.status != 206:  # server ignored the range: start over
+                have = 0
+            total = have + int(r.headers.get("Content-Length", 0))
+            log(f"downloading {name} ({total / 2**20:.0f} MB)")
+            with open(part, "ab" if have else "wb") as f:
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+                    have += len(chunk)
+                    if progress and total:
+                        progress((k + have / total) / len(todo), f"{have / 2**20:.0f} / {total / 2**20:.0f} MB")
+        if total and part.stat().st_size != total:
+            raise IOError(f"{name}: incomplete download, run calibration again to resume")
+        part.rename(data_dir / name)
 
 
 # --------------------------------------------------------------- documents
@@ -94,12 +114,26 @@ def build_docs(data_dir: Path, per_kind: int, seed: int = 0) -> list[tuple[str, 
     rng = random.Random(seed)
     human, ai_by_prompt, essays, essays_ai = _load_sources(data_dir, rng)
     docs = []
-    # 1) Long, fully human documents (false-positive rate per document)
+    # 1) Long, fully human documents of thesis-like length (~8,000 words), because the
+    #    chance that a document shows *any* red region grows with its length.
+    def long_doc(pool: list[str], start: int) -> tuple[list, int]:
+        out, n, j = [], 0, start
+        while n < LONG_WORDS and j < len(pool):
+            out.append((pool[j], 0))
+            n += _words(pool[j])
+            j += 1
+        return out, j
+
+    j = 0
     for i in range(per_kind):
-        docs.append(("human_long/essays", i, [(essays[3 * i + k], 0) for k in range(3)]))
+        pieces, j = long_doc(essays, j)
+        docs.append(("human_long/essays", i, pieces))
     for d in DOMAINS:
-        for i in range(per_kind // 2):
-            docs.append((f"human_long/{d}", i, [(s["text"], 0) for s in human[d][5 * i: 5 * i + 5]]))
+        j = 0
+        texts = [s["text"] for s in human[d][:len(human[d]) - 300]]  # tail is reserved for mixed docs
+        for i in range(max(1, per_kind // 2)):
+            pieces, j = long_doc(texts, j)
+            docs.append((f"human_long/{d}", i, pieces))
     # 2) Mixed: human seed followed by its paired AI continuation (same topic)
     for d in DOMAINS:
         for i in range(per_kind // 2):
@@ -119,7 +153,7 @@ def build_docs(data_dir: Path, per_kind: int, seed: int = 0) -> list[tuple[str, 
                 docs.append((f"mixed_insert/{d}", i, [(h1["text"], 0), (pair[0]["text"], 1), (h2["text"], 0)]))
     # 4) Fully AI documents
     for d in DOMAINS:
-        for i in range(per_kind // 4):
+        for i in range(max(1, per_kind // 4)):
             h = human[d][200 + i]
             for a in ai_by_prompt.get(h["prompt_id"], [])[:2]:
                 docs.append((f"ai/{d}/{a['generator']}", i, [(a["text"], 1)]))
@@ -200,7 +234,7 @@ def _auc(pos, neg) -> float:
     return float((ranks[: len(pos)].sum() - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
 
 
-def choose(recs: list[dict], doc_fpr: float = 0.02, yellow_doc_fpr: float = 0.15, run: int = 2,
+def choose(recs: list[dict], doc_fpr: float = 0.05, yellow_sentence_fpr: float = 0.03, run: int = 2,
            log=print) -> tuple[dict, list[dict]]:
     by = defaultdict(list)
     for r in recs:
@@ -220,7 +254,9 @@ def choose(recs: list[dict], doc_fpr: float = 0.02, yellow_doc_fpr: float = 0.15
             cands = sorted({round(x, 2) for r in human_docs for x in S[id(r)] if not math.isnan(x)})
             cands = [c for c in cands if c > -2] + [99.0]
             red = next(t + 0.01 for t in cands if doc_rate(t + 0.01, run) <= doc_fpr)
-            yel = min(red, next(t + 0.01 for t in cands if doc_rate(t + 0.01, 1) <= yellow_doc_fpr))
+            # yellow ("uncertain"): reached by only `yellow_sentence_fpr` of human sentences
+            hum = np.array([x for r in human_docs for x in S[id(r)] if not math.isnan(x)])
+            yel = round(min(red - 0.25, float(np.quantile(hum, 1 - yellow_sentence_fpr))), 2)
             hs, ais, caught, false_red = [], [], 0, 0
             for r in by["mixed_tail"] + by["mixed_insert"]:
                 sc = S[id(r)]
@@ -230,16 +266,19 @@ def choose(recs: list[dict], doc_fpr: float = 0.02, yellow_doc_fpr: float = 0.15
                     (ais if lab else hs).append(s)
                     caught += lab and l == "ai"
                     false_red += (not lab) and l == "ai"
-            ai_share = (np.mean([np.mean([l == "ai" for l in _levels(S[id(r)], red, yel, run)]) for r in by["ai"]])
-                        if by["ai"] else float("nan"))
+            ai_share = (float(np.mean([np.mean([l == "ai" for l in _levels(S[id(r)], red, yel, run)])
+                                       for r in by["ai"]])) if by["ai"] else None)
+            def num(x: float, nd: int = 3):
+                return None if x is None or math.isnan(x) else round(float(x), nd)
+
             row = {"window_words": w, "variant": variant, "red": red, "yellow": yel,
-                   "sentence_auc_mixed": round(_auc(ais, hs), 3),
-                   "ai_sentences_caught": round(caught / max(1, len(ais)), 3),
-                   "human_sentences_red_in_mixed": round(false_red / max(1, len(hs)), 3),
-                   "ai_docs_red_share": round(float(ai_share), 3)}
+                   "sentence_auc_mixed": num(_auc(ais, hs)),
+                   "ai_sentences_caught": num(caught / max(1, len(ais))),
+                   "human_sentences_red_in_mixed": num(false_red / max(1, len(hs))),
+                   "ai_docs_red_share": num(ai_share)}
             log(json.dumps(row))
             table.append(row)
-            key = row["ai_sentences_caught"] - 2 * row["human_sentences_red_in_mixed"]
+            key = (row["ai_sentences_caught"] or 0) - 2 * (row["human_sentences_red_in_mixed"] or 0)
             if best is None or key > best[0]:
                 best = (key, row)
     b = best[1]

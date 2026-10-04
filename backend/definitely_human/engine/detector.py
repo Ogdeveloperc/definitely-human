@@ -33,7 +33,7 @@ DOMAINS = {
 MIN_WORDS = 100  # MELD is unreliable below ~100 words.
 CALIBRATION = Path(__file__).with_name("calibration.json")
 # Used until eval/calibrate.py has written calibration.json.
-_DEFAULT_CAL = {"window_words": 120, "variant": "a", "red": 3.0, "yellow": 1.5, "min_run": 2}
+_DEFAULT_CAL = {"window_words": 60, "variant": "b", "red": 3.0, "yellow": 1.5, "min_run": 2}
 
 
 def calibration(profile: dict | None = None) -> dict:
@@ -45,6 +45,8 @@ def calibration(profile: dict | None = None) -> dict:
         if f.exists():
             cal.update(json.loads(f.read_text()))
     cal["personal"] = False
+    if profile and (profile.get("window_words"), profile.get("variant")) != (cal["window_words"], cal["variant"]):
+        profile = None  # built for a different scoring setup (e.g. before calibration): its numbers don't apply
     if profile:
         for k in ("red", "yellow"):
             if profile.get(k, -math.inf) > cal[k]:
@@ -93,7 +95,10 @@ def _load_meld(model_dir: str, device: torch.device) -> Meld:
     meld_model.load_file = lambda _path: None
     Meld.load_state_dict = lambda self, *a, **k: None
     try:
-        with device:
+        from transformers.initialization import no_init_weights
+
+        # every tensor is overwritten from the file below, so skip the random init
+        with device, no_init_weights():
             model = Meld(model_dir)
     finally:
         meld_model.load_file, Meld.load_state_dict = orig_load_file, orig_lsd
@@ -180,7 +185,7 @@ class Detector:
         per-token AI score. Spans must fit in one model window.
         """
         if token_budget is None:
-            token_budget = 16384 if self.device.type == "cuda" else 2048
+            token_budget = 16384 if self.device.type == "cuda" else 1024
         encs = []
         for a, b in spans:
             e = self.tok(text[a:b], add_special_tokens=False, return_offsets_mapping=True)
@@ -266,8 +271,11 @@ class Detector:
         sents = [(s.start, s.end) for _, s in flat]
         if not sents:
             raise ValueError("The document has no readable text.")
-        n_tok, score, fam, ops = self._doc_pass(canon)
-        sc, words = self.local_scores(canon, sents, cal, progress)
+        # progress: whole-document pass ~25%, local windows ~75% of the work
+        p_doc = (lambda f: progress(0.25 * f)) if progress else None
+        p_loc = (lambda f: progress(0.25 + 0.75 * f)) if progress else None
+        n_tok, score, fam, ops = self._doc_pass(canon, p_doc)
+        sc, words = self.local_scores(canon, sents, cal, p_loc)
         raw = ["ai" if v >= cal["red"] else "mixed" if v >= cal["yellow"] else "human" for v in sc]
         lv = min_run(raw, "ai", int(cal["min_run"]))
 
@@ -304,6 +312,7 @@ class Detector:
                 "n_tokens": n_tok,
                 "n_words": n_words,
                 "too_short": n_words < MIN_WORDS,
+                "language": style.language_check(canon),
             },
             "paragraphs": paragraphs,
             "style": style.document_stats(canon, sents),

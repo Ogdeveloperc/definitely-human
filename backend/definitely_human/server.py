@@ -9,7 +9,7 @@ import threading
 from datetime import date
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -46,6 +46,11 @@ app = FastAPI(title="Definitely Human", docs_url=None, redoc_url=None)
 class TextIn(BaseModel):
     text: str
     domain: str = "general"
+
+
+class ExportIn(BaseModel):
+    text: str
+    format: str = "docx"
 
 
 _last_ping = {"t": None}
@@ -87,23 +92,49 @@ def _profile() -> dict | None:
         return None
 
 
-def _run(text: str, domain: str) -> dict:
+def _check_ready(text: str) -> None:
     if state.calib.get("running"):
         raise HTTPException(409, "Calibration is running. Please wait until it finishes.")
     if state.detector is None:
         raise HTTPException(503, state.error or "The model is still loading.")
     if not text.strip():
         raise HTTPException(400, "The text is empty.")
-    with state.lock:  # one GPU, one analysis at a time
+
+
+def _stream(text: str, domain: str, source: dict) -> StreamingResponse:
+    """NDJSON stream: {"progress": f} lines while working, then {"result": ...} or {"error": ...}."""
+    import queue
+
+    _check_ready(text)
+    q: queue.Queue = queue.Queue()
+
+    def work():
         try:
-            return state.detector.analyze(text, domain, profile=_profile())
+            with state.lock:  # one GPU, one analysis at a time
+                r = state.detector.analyze(text, domain, profile=_profile(),
+                                           progress=lambda f: q.put({"progress": round(f, 3)}))
+            q.put({"result": {"source": source, **r}})
         except ValueError as e:
-            raise HTTPException(400, str(e)) from e
+            q.put({"error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            log.exception("analysis failed")
+            q.put({"error": f"{type(e).__name__}: {e}"})
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def gen():
+        while True:
+            m = q.get()
+            yield json.dumps(m) + "\n"
+            if "progress" not in m:
+                return
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
 @app.post("/api/analyze")
 def analyze(body: TextIn):
-    return {"source": {"kind": "text"}, **_run(body.text, body.domain)}
+    return _stream(body.text, body.domain, {"kind": "text"})
 
 
 @app.post("/api/analyze-file")
@@ -118,7 +149,30 @@ async def analyze_file(file: UploadFile = File(...), domain: str = Form("general
     except Exception as e:  # noqa: BLE001
         log.exception("extract failed")
         raise HTTPException(400, f"Couldn't read this file ({type(e).__name__}).") from e
-    return {"source": {"kind": "file", "name": file.filename, **meta}, **_run(text, domain)}
+    return _stream(text, domain, {"kind": "file", "name": file.filename, **meta})
+
+
+@app.post("/api/export")
+def export(body: ExportIn):
+    """Plain .txt or a simple .docx (one paragraph per blank-line-separated block)."""
+    import io
+
+    from fastapi.responses import Response
+
+    paras = [p.strip() for p in body.text.split("\n\n") if p.strip()]
+    if body.format == "txt":
+        return Response("\n\n".join(paras) + "\n", media_type="text/plain; charset=utf-8")
+    if body.format != "docx":
+        raise HTTPException(400, "format must be docx or txt")
+    import docx
+
+    d = docx.Document()
+    for p in paras:
+        d.add_paragraph(p)
+    buf = io.BytesIO()
+    d.save(buf)
+    return Response(buf.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 async def _read_upload(file: UploadFile) -> str:
@@ -170,7 +224,8 @@ async def build_profile(files: list[UploadFile] = File(...)):
     q = statistics.quantiles(all_scores, n=20)[-1] if len(all_scores) >= 20 else max(all_scores)
     prof = {"red": round(max(reds) + margin, 3), "yellow": round(q + margin, 3),
             "documents": len(texts), "words": words, "created": date.today().isoformat(),
-            "shipped_red": cal["red"], "shipped_yellow": cal["yellow"]}
+            "shipped_red": cal["red"], "shipped_yellow": cal["yellow"],
+            "window_words": cal["window_words"], "variant": cal["variant"]}
     PROFILE.parent.mkdir(parents=True, exist_ok=True)
     PROFILE.write_text(json.dumps(prof, indent=2))
     eff = calibration(prof)
@@ -178,7 +233,11 @@ async def build_profile(files: list[UploadFile] = File(...)):
             "changed": eff["personal"]}
 
 
-CALIB_PER_KIND = 150  # ~1,900 documents; about 15-30 minutes on an RTX 5070
+import os  # noqa: E402
+
+# ~150 per kind on an RTX 5070; overridable for testing the pipeline on slow machines.
+CALIB_PER_KIND = int(os.environ.get("DH_CALIB_PER_KIND", "60"))
+CALIB_SIZES = [int(x) for x in os.environ.get("DH_CALIB_SIZES", "60,120").split(",")]
 
 
 def _calibrate_job() -> None:
@@ -193,25 +252,38 @@ def _calibrate_job() -> None:
 
     try:
         st.update(phase="download", progress=0.0)
-        calib.fetch_data(CALIB_DIR / "data", log)
+        calib.fetch_data(CALIB_DIR / "data", log,
+                         progress=lambda f, detail: st.update(progress=round(f, 4), detail=detail))
+        st.pop("detail", None)
         st.update(phase="prepare")
         docs = calib.build_docs(CALIB_DIR / "data", CALIB_PER_KIND)
         st.update(phase="score", total=len(docs))
         with state.lock:
-            calib.score_docs(state.detector, docs, [60, 120], CALIB_DIR / "raw", log,
+            calib.score_docs(state.detector, docs, CALIB_SIZES, CALIB_DIR / "raw", log,
                              progress=lambda f: st.update(progress=round(f, 4)))
         st.update(phase="choose")
         cfg, table = calib.choose(calib.load_records(CALIB_DIR / "raw"), log=log)
         cfg["created"] = date.today().isoformat()
         cfg["device"] = state.detector.device_info.get("gpu", state.detector.device_info["device"])
         LOCAL_CALIBRATION.parent.mkdir(parents=True, exist_ok=True)
-        LOCAL_CALIBRATION.write_text(json.dumps(cfg, indent=2))
+        LOCAL_CALIBRATION.write_text(json.dumps(_finite(cfg), indent=2))
         st.update(phase="done", result=cfg, table=table, progress=1.0)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("calibration failed")
         st.update(phase="error", error=f"{type(e).__name__}: {e}")
     finally:
         st["running"] = False
+
+
+def _finite(o):
+    """JSON can't carry NaN/inf: turn them into null (e.g. a metric with no samples)."""
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: _finite(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_finite(v) for v in o]
+    return o
 
 
 @app.post("/api/calibrate")
@@ -222,16 +294,31 @@ def calibrate_start():
         return state.calib
     state.calib = {"running": True, "phase": "starting", "progress": 0.0, "log": []}
     threading.Thread(target=_calibrate_job, daemon=True).start()
-    return state.calib
+    return _finite(state.calib)
+
+
+def _json_safe(x):
+    """NaN/inf aren't valid JSON; a status poll must never fail because of one."""
+    if isinstance(x, float) and (math.isnan(x) or math.isinf(x)):
+        return None
+    if isinstance(x, dict):
+        return {k: _json_safe(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_json_safe(v) for v in x]
+    return x
 
 
 @app.get("/api/calibrate")
 def calibrate_status():
+    return _json_safe(_calibrate_status())
+
+
+def _calibrate_status():
     st = dict(state.calib)
     st["log"] = st.get("log", [])[-8:]
     if not st.get("running") and "result" not in st and LOCAL_CALIBRATION.exists():
         st["result"] = json.loads(LOCAL_CALIBRATION.read_text())
-    return st
+    return _finite(st)
 
 
 @app.delete("/api/calibrate")

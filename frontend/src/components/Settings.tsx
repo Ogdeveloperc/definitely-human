@@ -5,9 +5,10 @@ import {
   type CalibStatus, type Profile,
 } from '../api'
 import type { Strings } from '../i18n'
+import type { Status } from '../types'
 import { UpdateButton } from './UpdateButton'
 
-export function Settings({ t, open, onClose }: { t: Strings; open: boolean; onClose: () => void }) {
+export function Settings({ t, open, onClose, device }: { t: Strings; open: boolean; onClose: () => void; device: Status['device'] }) {
   return (
     <AnimatePresence>
       {open && (
@@ -20,6 +21,17 @@ export function Settings({ t, open, onClose }: { t: Strings; open: boolean; onCl
               <h3>{t.settings}</h3>
               <button className="btn ghost" onClick={onClose}>{t.close}</button>
             </div>
+            {device && (
+              <section className="set-sec" style={{ borderTop: 0 }}>
+                <h4>🖥️ {t.hardware}</h4>
+                <div className="row-between">
+                  <span className={`chip ${device.device === 'cpu' ? 'warn' : ''}`}>
+                    <span className="dot" />{device.gpu ? `⚡ ${device.gpu}` : t.cpuMode}
+                  </span>
+                </div>
+                <p className="hint">{device.device === 'cpu' ? t.cpuWarn : t.gpuHint}</p>
+              </section>
+            )}
             <ProfileSection t={t} />
             <CalibSection t={t} />
             <section className="set-sec">

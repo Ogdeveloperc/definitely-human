@@ -49,6 +49,16 @@ def from_pdf(data: bytes) -> tuple[list[str], dict]:
 
     reader = PdfReader(io.BytesIO(data))
     pages = [(pg.extract_text() or "").splitlines() for pg in reader.pages]
+    ocr_engine = None
+    n_words = sum(len(l.split()) for pl in pages for l in pl)
+    if pages and n_words < 25 * len(pages):  # almost no text layer: a scanned document
+        from .ocr import OcrUnavailable, ocr_pdf
+
+        try:
+            texts, ocr_engine = ocr_pdf(data)
+        except OcrUnavailable as e:
+            raise ValueError(str(e)) from e
+        pages = [t.splitlines() for t in texts]
     # Lines repeated on many pages are running headers/footers.
     counts = Counter(l.strip() for lines in pages for l in set(lines) if l.strip())
     repeated = {l for l, n in counts.items() if len(pages) >= 3 and n >= max(3, len(pages) // 2)}
@@ -89,7 +99,10 @@ def from_pdf(data: bytes) -> tuple[list[str], dict]:
     paras = [re.sub(r"\s+", " ", p).strip() for p in paras]
     paras = [p for p in paras if len(p.split()) >= 3 or _REF_HEADING.match(p)]
     paras, cut = _cut_references(paras)
-    return paras, {"references_removed": cut, "pages": len(pages)}
+    meta = {"references_removed": cut, "pages": len(pages)}
+    if ocr_engine:
+        meta["ocr"] = ocr_engine
+    return paras, meta
 
 
 def extract(filename: str, data: bytes) -> tuple[str, dict]:

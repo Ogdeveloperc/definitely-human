@@ -27,6 +27,9 @@ export default function App() {
   const [settings, setSettings] = useState(false)
   const [setup, setSetup] = useState(false)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [prev, setPrev] = useState<Analysis | null>(null)
+  const [rescanning, setRescanning] = useState(false)
   const t = strings[lang]
 
   useEffect(() => { writePref('dh.lang', lang); document.documentElement.lang = lang }, [lang])
@@ -68,15 +71,36 @@ export default function App() {
 
   const submit = async (s: Submission) => {
     setError(null)
+    setProgress(0)
+    setPrev(null)
     setView('busy')
     try {
-      const r = s.kind === 'text' ? await analyzeText(s.text, domain) : await analyzeFile(s.file, domain)
+      const r = s.kind === 'text'
+        ? await analyzeText(s.text, domain, setProgress)
+        : await analyzeFile(s.file, domain, setProgress)
       setResult(r)
       setView('result')
       window.scrollTo({ top: 0 })
     } catch (e) {
       setError((e as Error).message)
       setView('input')
+    }
+  }
+
+  /** Re-analyze the edited text in place; the old result stays visible until the new one is ready. */
+  const rescan = async (text: string) => {
+    if (!result) return
+    setProgress(0)
+    setRescanning(true)
+    try {
+      const r = await analyzeText(text, domain, setProgress)
+      setPrev(result)
+      setResult({ ...r, source: { ...result.source, references_removed: false } })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (e) {
+      window.alert(`${t.error}: ${(e as Error).message}`)
+    } finally {
+      setRescanning(false)
     }
   }
 
@@ -87,11 +111,6 @@ export default function App() {
       <header className="top">
         <Logo height={34} />
         <div className="top-right">
-          {dev && (
-            <span className={`chip ${dev.device === 'cpu' ? 'warn' : ''}`} title={dev.warning ?? ''}>
-              <span className="dot" />{dev.gpu ?? 'CPU'}
-            </span>
-          )}
           <button className="icon-btn" onClick={() => setSettings(true)} disabled={!ready}>⚙︎ {t.settings}</button>
           <div className="lang">
             {(['tr', 'en'] as const).map((l) => (
@@ -146,16 +165,17 @@ export default function App() {
           </motion.div>
         ) : view === 'busy' ? (
           <motion.div key="busy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Analyzing label={t.analyzing} hint={t.analyzingHint} />
+            <Analyzing label={t.analyzing} hint={t.analyzingHint} progress={progress} />
           </motion.div>
         ) : result ? (
           <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Results r={result} t={t} onReset={() => setView('input')} />
+            <Results key={result.text.length + ':' + result.document.score} r={result} prev={prev} t={t}
+              onReset={() => setView('input')} onRescan={rescan} rescanning={rescanning} progress={progress} />
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      <Settings t={t} open={settings} onClose={() => setSettings(false)} />
+      <Settings t={t} open={settings} onClose={() => setSettings(false)} device={dev ?? null} />
 
       <footer className="foot">
         <p>{t.disclaimer}</p>
@@ -164,7 +184,7 @@ export default function App() {
   )
 }
 
-function Analyzing({ label, hint }: { label: string; hint: string }) {
+function Analyzing({ label, hint, progress }: { label: string; hint: string; progress: number }) {
   return (
     <div className="card scan-wrap" style={{ marginTop: 40 }}>
       <motion.div className="scan-bar" initial={{ top: -70 }} animate={{ top: '100%' }}
@@ -175,6 +195,10 @@ function Analyzing({ label, hint }: { label: string; hint: string }) {
           <b style={{ fontSize: 18 }}>{label}<Dots /></b>
           <div style={{ color: 'var(--ink-3)', fontSize: 14 }}>{hint}</div>
         </div>
+        <b className="pct">{Math.round(progress * 100)}%</b>
+      </div>
+      <div className="progress" style={{ marginTop: 14 }}>
+        <motion.div animate={{ width: `${Math.max(2, progress * 100)}%` }} transition={{ ease: 'easeOut', duration: 0.4 }} />
       </div>
       <div className="scan-lines">
         {[92, 100, 84, 97, 60, 0, 95, 88, 100, 72].map((w, i) => (

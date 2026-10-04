@@ -206,3 +206,27 @@ textarea { font: inherit; }
 
 .update-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin: -10px auto 18px; padding: 10px 16px; border-radius: 14px; background: var(--green-soft); color: #0f5a39; max-width: 760px; }
 .update-banner .btn { padding: 7px 14px; font-size: 14px; text-decoration: none; }
+
+/* editing + export */
+.edit-hint { margin: -6px 0 12px; font-size: 13px; color: var(--ink-3); }
+.para { cursor: text; border-radius: 8px; transition: background .2s; margin: 0 -8px 1.1em !important; padding: 2px 8px; }
+.para:hover { background: #f7f8f6; }
+.para.edited { color: var(--ink-2); background: #f3f6ff; }
+.para.edited .badge { background: #e3e9ff; color: #2b4bb3; vertical-align: 2px; }
+.para-edit { margin: 0 -8px 1.1em; }
+.para-edit textarea { width: 100%; font: inherit; font-size: 17px; line-height: 1.75; padding: 10px 12px; border: 2px solid var(--green); border-radius: 12px; outline: none; resize: none; box-shadow: 0 0 0 4px var(--green-soft); overflow: hidden; }
+.para-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.para-actions .btn { padding: 7px 14px; font-size: 14px; }
+.text.faded .s.ai, .text.faded .s.mixed { opacity: .45; }
+.rescan-bar { position: fixed; left: 0; right: 0; margin: 0 auto; bottom: 22px; z-index: 40; display: flex; align-items: center; gap: 12px; background: var(--ink); color: #fff; padding: 10px 12px 10px 18px; border-radius: 16px; box-shadow: 0 14px 40px rgba(0,0,0,.25); width: min(560px, calc(100vw - 32px)); }
+.rescan-bar span { flex: 1; }
+.rescan-bar .btn { background: var(--green); padding: 9px 16px; font-size: 15px; }
+.rescan-bar .btn.ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.25); }
+.rescan-bar .progress { background: rgba(255,255,255,.15); }
+.menu-wrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; width: 250px; }
+.menu button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 9px; font-size: 14px; color: var(--ink); }
+.menu button:hover { background: var(--bg); }
+.menu small { display: block; padding: 6px 10px 4px; color: var(--ink-3); font-size: 12px; line-height: 1.4; }
+.delta { font-style: normal; color: var(--ink-3); }
+.pct { margin-left: auto; font-size: 26px; font-variant-numeric: tabular-nums; }

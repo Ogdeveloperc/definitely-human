@@ -4,13 +4,19 @@
 Paste text or drop a Word/PDF file. Instead of one opaque percentage, the app shows
 **which regions** read as AI-written, on a green / yellow / red map of the text.
 
-- 100% local: no internet, no API, no cloud. Text never leaves the computer.
-  (The only network calls: first-time setup, the optional *Full calibration*, and the *Check for updates* button.)
+- 100% local: no API, no cloud. Text never leaves the computer.
+  Network is used only for: installation, the one-time *Full calibration*, and a version check at start
+  (only the latest release number is fetched; can be turned off in Settings).
 - Detector: [MELD](https://huggingface.co/anon-review-meld-2026/meld), the top open-source model on the RAID benchmark
   (a 1B-parameter encoder, not a chat LLM).
 - Explanations come from measurements, never generated text: per-region model scores, per-word emphasis,
   measured style statistics (sentence-length variety, stock phrases, em dashes).
+- Fix and rescan: click a flagged paragraph, rewrite it in place, rescan; see the before/after numbers.
+- Export the edited text (.docx / .txt) or a coloured analysis report (.html, printable to PDF).
 - "Learn my writing": add a few pre-2022 texts you wrote; your own style won't be flagged.
+- Word, PDF and text files. References, running headers and page numbers are removed.
+  Scanned PDFs are read with Windows' built-in OCR.
+- English only: other languages are detected and not scored.
 
 > No AI detector is proof. Treat red regions as places to review, not as a verdict.
 

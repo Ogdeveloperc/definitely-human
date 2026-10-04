@@ -12,3 +12,4 @@ dist/
 data/
 build/
 .claude/settings.local.json
+.claude/launch.json

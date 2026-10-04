@@ -72,6 +72,31 @@ jobs:
           & $py -m definitely_human.cli --device cpu check tests/fixtures/sample.pdf --domain paper
           if ($LASTEXITCODE -ne 0) { throw "pdf check failed" }
 
+      - name: Scanned PDF via Windows OCR (informational)
+        if: github.event_name == 'push' || inputs.smoke_test
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          & C:\DefinitelyHuman\.venv\Scripts\python.exe -c "from definitely_human import docparse; t,m=docparse.extract('s.pdf', open('tests/fixtures/scanned.pdf','rb').read()); print(m); print(t[:400])"
+
+      - name: Smoke test (the desktop shortcut path - pythonw serve + HTTP API)
+        if: github.event_name == 'push' || inputs.smoke_test
+        shell: pwsh
+        run: |
+          $pyw = "C:\DefinitelyHuman\.venv\Scripts\pythonw.exe"
+          Start-Process $pyw -ArgumentList "-m","definitely_human.cli","--device","cpu","serve","--no-browser" -WorkingDirectory C:\DefinitelyHuman
+          $ready = $false
+          for ($i = 0; $i -lt 120; $i++) {
+            Start-Sleep 5
+            try { $s = Invoke-RestMethod http://127.0.0.1:8765/api/status; if ($s.ready) { $ready = $true; break } } catch {}
+          }
+          if (-not $ready) { Get-Content C:\DefinitelyHuman\data\*.log; throw "server never became ready" }
+          Invoke-WebRequest http://127.0.0.1:8765/ -UseBasicParsing | Out-Null
+          $out = curl.exe -s -N -F "file=@tests/fixtures/sample.docx" -F "domain=essay" http://127.0.0.1:8765/api/analyze-file
+          $last = ($out -split "`n" | Where-Object { $_ -ne "" })[-1] | ConvertFrom-Json
+          if (-not $last.result) { Write-Host $out; throw "analysis via HTTP failed" }
+          Write-Host ("AI share: {0}  words: {1}" -f $last.result.document.ai_share, $last.result.document.n_words)
+
       - name: Attach to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

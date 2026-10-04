@@ -39,6 +39,6 @@ catch {
   Write-Host "KURULUM HATASI / SETUP ERROR: $_" -ForegroundColor Red
   Write-Host "Internet baglantisini kontrol edip Setup.exe'yi tekrar calistirin."
   Write-Host "Check the internet connection and run Setup.exe again."
-  Read-Host "Kapatmak icin Enter / Press Enter to close"
+  if ([Environment]::UserInteractive -and -not $env:CI) { Read-Host "Kapatmak icin Enter / Press Enter to close" }
   exit 1
 }

@@ -25,7 +25,7 @@ _PHRASE_RE = re.compile(
     r"(?<![A-Za-z])(" + "|".join(re.escape(p) for p in sorted(PHRASES, key=len, reverse=True)) + r")(?![A-Za-z])",
     re.I,
 )
-_WORD = re.compile(r"[A-Za-z']+")
+_WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?")  # letters in any script, with apostrophes
 
 
 def phrase_hits(text: str, start: int, end: int) -> list[dict]:
@@ -54,3 +54,24 @@ def document_stats(text: str, sentences: list[tuple[int, int]]) -> dict:
         "ai_phrases_per_1k": round(1000 * hits / n, 1) if n else 0.0,
         "em_dashes_per_1k": round(1000 * text.count("—") / n, 1) if n else 0.0,
     }
+
+
+_EN_FUNCTION = set("""the of and to a in is that it for was on are as with be by this at from or have an
+not but which they his her their its were has had been can will would there what all we one
+you he she if so do more about when also than into some these other could our may who no only
+then them how my your any each such those most over after should""".split())
+_NON_EN_CHARS = set("çğışöüâêîôûäëïñãõåøæœßéèàùáíóú")
+
+
+def language_check(text: str) -> dict:
+    """Rough English check: share of common English function words, and of non-English letters."""
+    words = [w.lower() for w in _WORD.findall(text)]
+    if not words:
+        return {"english": False, "en_ratio": 0.0}
+    en = sum(w in _EN_FUNCTION for w in words) / len(words)
+    letters = [c for c in text.lower() if c.isalpha()]
+    foreign = sum(c in _NON_EN_CHARS for c in letters) / max(1, len(letters))
+    # Real English prose is ~35-50% function words; other languages score well under 10%.
+    # Loanwords (café, naïve) add a few accented letters to English, so plenty of
+    # function words outweighs them.
+    return {"english": en >= 0.25 or (en >= 0.15 and foreign < 0.02), "en_ratio": round(en, 3)}

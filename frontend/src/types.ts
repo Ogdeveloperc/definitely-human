@@ -18,7 +18,7 @@ export interface Paragraph { start: number; end: number; score: number; level: L
 export interface Ranked { label: string; p: number }
 
 export interface Analysis {
-  source: { kind: 'text' | 'file'; name?: string; references_removed?: boolean; pages?: number }
+  source: { kind: 'text' | 'file'; name?: string; references_removed?: boolean; pages?: number; ocr?: string }
   text: string
   document: {
     score: number
@@ -33,6 +33,7 @@ export interface Analysis {
     n_tokens: number
     n_words: number
     too_short: boolean
+    language: { english: boolean; en_ratio: number }
   }
   paragraphs: Paragraph[]
   style: {
