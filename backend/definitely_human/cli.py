@@ -32,6 +32,11 @@ def cmd_download(_a) -> int:
         print(f"  get  {f} ...", flush=True)
         hf_hub_download(MELD_REPO, f, revision=MELD_REVISION, local_dir=MODEL_DIR)
     print(f"Model ready in {MODEL_DIR}")
+    print("  get  OCR model (docTR) ...", flush=True)
+    from .ocr import prefetch
+
+    prefetch()
+    print("OCR model ready")
     return 0
 
 

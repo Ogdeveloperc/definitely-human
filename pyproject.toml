@@ -7,6 +7,8 @@ requires-python = ">=3.11,<3.13"
 license = "MIT"
 dependencies = [
     "torch>=2.7",
+    "torchvision>=0.22",
+    "python-doctr>=1.0",
     "transformers>=4.48",
     "safetensors>=0.4",
     "fastapi>=0.115",
@@ -17,16 +19,8 @@ dependencies = [
     "huggingface-hub>=0.25",
     "numpy>=1.26",
     "pyarrow>=15",
-    # OCR for scanned PDFs: page rendering + Windows' built-in, offline OCR engine
+    # OCR for scanned PDFs (docTR renders pages with pypdfium2)
     "pypdfium2>=4.30",
-    "winrt-runtime>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Foundation>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Foundation.Collections>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Globalization>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Graphics.Imaging>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Media.Ocr>=3.2; sys_platform == 'win32'",
-    "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
-    "python-doctr>=0.10",
 ]
 
 [project.scripts]
@@ -43,6 +37,9 @@ packages = ["backend/definitely_human"]
 # macOS uses the default PyPI wheels (MPS/CPU).
 [tool.uv.sources]
 torch = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+torchvision = [  # docTR (OCR) needs it; must match the CUDA build of torch
     { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
 ]
 

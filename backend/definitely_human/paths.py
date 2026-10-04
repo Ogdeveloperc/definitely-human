@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = Path(os.environ.get("DH_MODEL_DIR", ROOT / "models" / "meld"))
+DOCTR_DIR = Path(os.environ.get("DH_DOCTR_DIR", ROOT / "models" / "doctr"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DATA_DIR = Path(os.environ.get("DH_DATA_DIR", ROOT / "data"))
 PROFILE = DATA_DIR / "profile.json"

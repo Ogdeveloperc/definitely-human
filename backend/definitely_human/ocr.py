@@ -1,75 +1,68 @@
-"""OCR for scanned PDFs with Windows' built-in, offline OCR engine (Windows.Media.Ocr).
+"""OCR for scanned PDFs with docTR (Mindee, Apache-2.0), fully offline.
 
-Windows only: the app targets Windows, and the open-source engines we tried
-(RapidOCR's default models) mangle English (dropped spaces, missed lines).
-OCR mistakes ("rn" read as "m") also distort the detector, so OCR'd text is
-flagged in the UI as less reliable.
+docTR runs on the same PyTorch as the detector, so on the RTX it reads a page in
+well under a second. Its weights live in models/doctr and are fetched once by
+`definitely-human download`; the app never goes online when a scanned file
+comes in. OCR mistakes ("rn" read as "m") also distort the detector, so OCR'd
+text is flagged in the UI as less reliable.
 """
 from __future__ import annotations
 
-import io
 import logging
-import sys
+import os
+import threading
 
+from .paths import DOCTR_DIR
+
+os.environ.setdefault("DOCTR_CACHE_DIR", str(DOCTR_DIR))
 log = logging.getLogger(__name__)
-DPI = 200
 
-
-def _pages(data: bytes):
-    import pypdfium2 as pdfium
-
-    pdf = pdfium.PdfDocument(data)
-    for i in range(len(pdf)):
-        yield pdf[i].render(scale=DPI / 72).to_pil().convert("RGB")
-
-
-def _windows_engine():
-    from winrt.windows.globalization import Language
-    from winrt.windows.media.ocr import OcrEngine
-
-    for tag in ("en-US", "en-GB", "en"):
-        lang = Language(tag)
-        if OcrEngine.is_language_supported(lang):
-            return OcrEngine.try_create_from_language(lang), tag
-    eng = OcrEngine.try_create_from_user_profile_languages()
-    return eng, "user-profile"
-
-
-def _windows_ocr(img, engine) -> str:
-    import asyncio
-
-    from winrt.windows.graphics.imaging import BitmapDecoder
-    from winrt.windows.storage.streams import DataWriter, InMemoryRandomAccessStream
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-
-    async def run() -> str:
-        stream = InMemoryRandomAccessStream()
-        writer = DataWriter(stream)
-        writer.write_bytes(list(buf.getvalue()))
-        await writer.store_async()
-        stream.seek(0)
-        decoder = await BitmapDecoder.create_async(stream)
-        bitmap = await decoder.get_software_bitmap_async()
-        result = await engine.recognize_async(bitmap)
-        return "\n".join(line.text for line in result.lines)
-
-    return asyncio.run(run())
+DET_ARCH, RECO_ARCH = "db_resnet50", "crnn_vgg16_bn"
+_lock = threading.Lock()
+_predictor = None
 
 
 class OcrUnavailable(RuntimeError):
     pass
 
 
+def _get(allow_download: bool = False):
+    global _predictor
+    with _lock:
+        if _predictor is None:
+            if not allow_download and not any(DOCTR_DIR.rglob("*.pt")):
+                raise OcrUnavailable("This PDF is a scanned image and the OCR model isn't installed. "
+                                     "Run the Repair shortcut (or `definitely-human download`) once with internet.")
+            import torch
+            from doctr.models import ocr_predictor
+
+            p = ocr_predictor(det_arch=DET_ARCH, reco_arch=RECO_ARCH, pretrained=True,
+                              assume_straight_pages=True)
+            if torch.cuda.is_available():
+                p = p.cuda()
+            _predictor = p
+        return _predictor
+
+
+def prefetch() -> None:
+    """Download the OCR weights into models/doctr (installer step)."""
+    _get(allow_download=True)
+
+
 def ocr_pdf(data: bytes) -> tuple[list[str], str]:
-    """Return per-page text and the engine used."""
-    if sys.platform != "win32":
-        raise OcrUnavailable("This PDF is a scanned image. Reading scanned PDFs (OCR) works on Windows only.")
-    try:
-        engine, tag = _windows_engine()
-    except Exception as e:  # noqa: BLE001
-        raise OcrUnavailable(f"Windows OCR isn't available on this PC ({e}).") from e
-    if engine is None:
-        raise OcrUnavailable("Windows OCR has no language installed. Add English in Settings > Time & language.")
-    return [_windows_ocr(img, engine) for img in _pages(data)], f"windows-ocr ({tag})"
+    """Return per-page text (lines; a blank line between text blocks) and the engine used."""
+    from doctr.io import DocumentFile
+
+    pages = DocumentFile.from_pdf(data, scale=2)  # 144 dpi: plenty for body text
+    result = _get()(pages)
+    texts = []
+    for page in result.pages:
+        lines: list[str] = []
+        for block in page.blocks:
+            for line in block.lines:
+                t = " ".join(w.value for w in line.words).strip()
+                if t:
+                    lines.append(t)
+            lines.append("")
+        texts.append("\n".join(lines))
+    return texts, f"doctr ({DET_ARCH} + {RECO_ARCH})"

@@ -15,7 +15,7 @@ Paste text or drop a Word/PDF file. Instead of one opaque percentage, the app sh
 - Export the edited text (.docx / .txt) or a coloured analysis report (.html, printable to PDF).
 - "Learn my writing": add a few pre-2022 texts you wrote; your own style won't be flagged.
 - Word, PDF and text files. References, running headers and page numbers are removed.
-  Scanned PDFs are read with Windows' built-in OCR.
+  Scanned PDFs are read offline with docTR OCR (runs on the GPU).
 - English only: other languages are detected and not scored.
 
 > No AI detector is proof. Treat red regions as places to review, not as a verdict.

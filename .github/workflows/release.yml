@@ -72,12 +72,12 @@ jobs:
           & $py -m definitely_human.cli --device cpu check tests/fixtures/sample.pdf --domain paper
           if ($LASTEXITCODE -ne 0) { throw "pdf check failed" }
 
-      - name: Scanned PDF via Windows OCR (informational)
+      - name: Scanned PDF via docTR OCR
         if: github.event_name == 'push' || inputs.smoke_test
         shell: pwsh
-        continue-on-error: true
         run: |
-          & C:\DefinitelyHuman\.venv\Scripts\python.exe -c "from definitely_human import docparse; t,m=docparse.extract('s.pdf', open('tests/fixtures/scanned.pdf','rb').read()); print(m); print(t[:400])"
+          & C:\DefinitelyHuman\.venv\Scripts\python.exe -c "from definitely_human import docparse; t,m=docparse.extract('s.pdf', open('tests/fixtures/scanned.pdf','rb').read()); print(m); print(t[:400]); assert 'grandfather' in t and 'algorithmic bias' in t"
+          if ($LASTEXITCODE -ne 0) { throw "OCR failed" }
 
       - name: Smoke test (the desktop shortcut path - pythonw serve + HTTP API)
         if: github.event_name == 'push' || inputs.smoke_test
