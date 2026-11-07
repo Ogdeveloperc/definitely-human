@@ -163,13 +163,16 @@ Weights: [odeveloper/meld](https://huggingface.co/odeveloper/meld) (verified mir
 ## Develop
 
 ```bash
-uv sync                                # Python 3.12 + deps (macOS: CPU/MPS torch; Windows: CUDA 12.8 torch)
+uv sync                                # Python 3.12 + deps (macOS: MPS; Windows/Linux: CUDA 12.8)
 uv run definitely-human download       # fetch the models into models/
 cd frontend && npm install && npm run build && cd ..
 uv run definitely-human serve          # http://127.0.0.1:8765
 uv run definitely-human check essay.docx --domain essay
 PYTHONPATH=backend uv run pytest -q tests
 ```
+
+The app automatically prefers CUDA, then Apple MPS/Metal, and falls back to the CPU. Use the global
+`--device cuda|mps|cpu` option before a command only when you need to override that choice.
 
 Calibrate from the command line (GPU strongly recommended):
 

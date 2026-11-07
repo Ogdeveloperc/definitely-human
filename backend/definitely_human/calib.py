@@ -182,7 +182,7 @@ def build_docs(data_dir: Path, per_kind: int, seed: int = 0) -> list[tuple[str, 
 def score_docs(det, docs, sizes: list[int], out_dir: Path, log=print, progress=None) -> None:
     """Score every document's local windows; one resumable pickle per document."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    budget = 16384 if det.device.type == "cuda" else 4096
+    budget = 16384 if det.device.type in ("cuda", "mps") else 4096
     for n, (kind, idx, pieces) in enumerate(docs):
         path = out_dir / f"{kind.replace('/', '__')}__{idx}.pkl"
         if progress:

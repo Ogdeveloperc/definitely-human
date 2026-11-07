@@ -56,7 +56,7 @@ def cmd_doctor(a) -> int:
     info["model_present"] = (MODEL_DIR / "model.safetensors").exists()
     print(json.dumps(info, indent=2))
     dc = info.get("driver_check", {})
-    if info["device"] == "cuda":
+    if info["device"] in ("cuda", "mps"):
         print(f"\nOK: ekran karti kullanilacak / the GPU will be used: {info.get('gpu')}")
     elif dc.get("status") == "outdated":
         print(f"\nUYARI / WARNING: NVIDIA surucusu eski ({dc.get('driver')}), en az {dc.get('driver_min')} gerekli.")
@@ -131,7 +131,7 @@ def cmd_serve(a) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="definitely-human")
-    ap.add_argument("--device", choices=["cuda", "cpu"], default=None)
+    ap.add_argument("--device", choices=["cuda", "mps", "cpu"], default=None)
     sub = ap.add_subparsers(dest="cmd")
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=8765)

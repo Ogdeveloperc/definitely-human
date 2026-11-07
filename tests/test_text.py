@@ -82,3 +82,78 @@ def test_driver_check():
     assert gpu.driver_status(False, g)["status"] == "cuda_error"
     assert gpu.driver_status(False, [])["status"] == "no_nvidia"
     assert gpu.parse_version("570.65") >= (570, 65) > gpu.parse_version("566.36")
+
+
+def test_device_picker_uses_mps_when_cuda_is_absent(monkeypatch):
+    from definitely_human.engine import detector, gpu
+
+    monkeypatch.setattr(gpu, "query_nvidia", lambda: [])
+    monkeypatch.setattr(detector.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(detector.torch.backends.mps, "is_available", lambda: True)
+    monkeypatch.setattr(detector.torch.backends.mps, "get_name", lambda: "Apple Test GPU")
+    monkeypatch.setattr(detector, "_probe_device", lambda kind: None)
+
+    dev, info = detector.pick_device()
+    assert dev.type == "mps"
+    assert info["device"] == "mps"
+    assert info["gpu"] == "Apple Test GPU"
+    assert "driver_check" not in info
+
+
+def test_device_picker_falls_back_when_mps_probe_fails(monkeypatch):
+    from definitely_human.engine import detector, gpu
+
+    def fail(_kind):
+        raise RuntimeError("Metal failed")
+
+    monkeypatch.setattr(gpu, "query_nvidia", lambda: [])
+    monkeypatch.setattr(detector.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(detector.torch.backends.mps, "is_available", lambda: True)
+    monkeypatch.setattr(detector, "_probe_device", fail)
+
+    dev, info = detector.pick_device()
+    assert dev.type == info["device"] == "cpu"
+    assert "Metal failed" in info["warning"]
+    assert "driver_check" not in info
+
+
+def test_device_picker_still_prefers_cuda(monkeypatch):
+    from types import SimpleNamespace
+
+    from definitely_human.engine import detector, gpu
+
+    probed = []
+    monkeypatch.setattr(gpu, "query_nvidia", lambda: [])
+    monkeypatch.setattr(detector.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(detector.torch.cuda, "get_device_name", lambda _index: "NVIDIA Test GPU")
+    monkeypatch.setattr(detector.torch.cuda, "get_device_capability", lambda _index: (12, 0))
+    monkeypatch.setattr(detector.torch.cuda, "get_device_properties",
+                        lambda _index: SimpleNamespace(total_memory=8 * 2**30))
+    monkeypatch.setattr(detector.torch.backends.mps, "is_available", lambda: True)
+    monkeypatch.setattr(detector, "_probe_device", probed.append)
+
+    dev, info = detector.pick_device()
+    assert dev.type == info["device"] == "cuda"
+    assert probed == ["cuda"]
+
+
+def test_ocr_uses_mps_when_cuda_is_absent(monkeypatch):
+    import torch
+    from doctr import models
+
+    from definitely_human import ocr
+
+    class Predictor:
+        device = "cpu"
+
+        def to(self, device):
+            self.device = device
+            return self
+
+    predictor = Predictor()
+    monkeypatch.setattr(ocr, "_predictor", None)
+    monkeypatch.setattr(models, "ocr_predictor", lambda **_kwargs: predictor)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+
+    assert ocr._get(allow_download=True).device == "mps"
