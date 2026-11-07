@@ -57,8 +57,16 @@ def calibration(profile: dict | None = None) -> dict:
 _WORD_SPAN = re.compile(r"\S+")
 
 
+def _probe_device(kind: str) -> None:
+    """Run a real operation before committing the app to an accelerator."""
+    x = torch.randn(256, 256, device=kind)
+    float((x @ x).sum())
+    if kind == "mps":
+        torch.mps.synchronize()
+
+
 def pick_device(prefer: str | None = None) -> tuple[torch.device, dict]:
-    """Choose CUDA when it really works, otherwise CPU. Returns (device, info).
+    """Choose CUDA or Apple MPS when it really works, otherwise CPU.
 
     info also carries the NVIDIA driver check (see gpu.driver_status) so the UI
     can say whether the driver needs updating.
@@ -70,22 +78,30 @@ def pick_device(prefer: str | None = None) -> tuple[torch.device, dict]:
     dev, cuda_works = torch.device("cpu"), False
     if prefer == "cpu":
         info["device"] = "cpu"
-    elif torch.cuda.is_available():
+    elif prefer != "mps" and torch.cuda.is_available():
         try:
             name = torch.cuda.get_device_name(0)
             cap = torch.cuda.get_device_capability(0)
-            x = torch.randn(256, 256, device="cuda")
-            float((x @ x).sum())  # fails with "no kernel image" on unsupported GPUs
+            _probe_device("cuda")  # catches missing kernels on unsupported GPUs
             total = torch.cuda.get_device_properties(0).total_memory
             dev, cuda_works = torch.device("cuda"), True
             info.update(device="cuda", gpu=name, capability=f"{cap[0]}.{cap[1]}",
                         vram_gb=round(total / 2**30, 1))
         except Exception as e:  # noqa: BLE001
             info["warning"] = f"GPU found but unusable ({e}); running on CPU, which is slower."
+    elif prefer != "cuda" and torch.backends.mps.is_available():
+        try:
+            _probe_device("mps")
+            dev = torch.device("mps")
+            name = torch.backends.mps.get_name() if hasattr(torch.backends.mps, "get_name") else "Apple GPU"
+            info.update(device="mps", gpu=name, metal=True)
+        except Exception as e:  # noqa: BLE001
+            info["warning"] = f"Apple GPU found but unusable ({e}); running on CPU, which is slower."
     else:
-        info["warning"] = "No CUDA GPU detected; running on CPU, which is slower."
+        wanted = "CUDA" if prefer == "cuda" else "compatible"
+        info["warning"] = f"No {wanted} GPU detected; running on CPU, which is slower."
     info.setdefault("device", "cpu")
-    if prefer != "cpu":
+    if prefer != "cpu" and info["device"] != "mps" and not torch.backends.mps.is_available():
         info["driver_check"] = gpu.driver_status(cuda_works, nvidia)
     return dev, info
 
@@ -196,7 +212,7 @@ class Detector:
         per-token AI score. Spans must fit in one model window.
         """
         if token_budget is None:
-            token_budget = 16384 if self.device.type == "cuda" else 1024
+            token_budget = 16384 if self.device.type in ("cuda", "mps") else 1024
         encs = []
         for a, b in spans:
             e = self.tok(text[a:b], add_special_tokens=False, return_offsets_mapping=True)
@@ -238,7 +254,7 @@ class Detector:
         ids = self.tok(canon, add_special_tokens=False, truncation=False)["input_ids"]
         if not ids:
             raise ValueError("The document has no readable text.")
-        c, s, o = self._token_scores(ids, 4 if self.device.type == "cuda" else 1, progress)
+        c, s, o = self._token_scores(ids, 1 if self.device.type == "cpu" else 4, progress)
         return (len(ids), float(top_quantile_mean(c, self.rho)),
                 top_quantile_mean(s, self.rho), top_quantile_mean(o, self.rho))
 

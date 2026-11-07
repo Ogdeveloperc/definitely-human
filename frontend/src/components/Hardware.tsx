@@ -16,9 +16,11 @@ export const driverNeedsAction = (d: Device | null | undefined) =>
 export function Hardware({ t, device }: { t: Strings; device: Device }) {
   const [opened, setOpened] = useState<string | null>(null)
   const dc = device.driver_check
-  const status = dc?.status ?? (device.device === 'cuda' ? 'ok' : 'no_nvidia')
+  const accelerated = device.device === 'cuda' || device.device === 'mps'
+  const status = dc?.status ?? (accelerated ? 'ok' : 'cpu')
   const message = {
-    ok: device.device === 'cuda' ? t.gpuHint : t.cpuWarn,
+    ok: accelerated ? t.gpuHint : t.cpuWarn,
+    cpu: t.cpuWarn,
     outdated: fill(t.drvOutdated, device),
     cuda_error: fill(t.drvCudaError, device),
     no_nvidia: t.drvNoNvidia,
@@ -41,7 +43,7 @@ export function Hardware({ t, device }: { t: Strings; device: Device }) {
         </div>
       )}
       <p className="hint" style={{ color: status === 'ok' ? undefined : '#8a5a00' }}>
-        {status === 'ok' && device.device === 'cuda' ? '✓ ' : '⚠️ '}{message}
+        {status === 'ok' && accelerated ? '✓ ' : '⚠️ '}{message}
       </p>
       {(status === 'outdated' || status === 'cuda_error') && (
         <>

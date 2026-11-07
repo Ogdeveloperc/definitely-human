@@ -40,6 +40,8 @@ def _get(allow_download: bool = False):
                               assume_straight_pages=True)
             if torch.cuda.is_available():
                 p = p.cuda()
+            elif torch.backends.mps.is_available():
+                p = p.to("mps")
             _predictor = p
         return _predictor
 
